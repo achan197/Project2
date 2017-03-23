@@ -3,8 +3,9 @@
 
 #include <cstdlib>
 #include <ncurses.h>
-#include <Editor.h>
+//#include <Editor.h>
 #include <vector>
+#include <string>
 
 typedef unsigned int uint;
 
@@ -13,16 +14,21 @@ typedef unsigned int uint;
 * and manipulation of the buffer
 * of text passed in by the Editor
 */
+
 class Buffer{
+
+ public:
 
   //member variables
   WINDOW * win;
   uint row,col;
-  std::vector<char> contents;
+  std::vector<std::string> contents;
   uint cursorY, cursorX;
 
-  //Constructor
-  Buffer(const std::vector);
+  //Constructors
+  Buffer();
+  Buffer(std::vector<std::string> &);
+  Buffer(std::string);
   ~Buffer();
 
   //Cursor movement
@@ -41,6 +47,13 @@ class Buffer{
   void nextPage();
   void prevPage();
 
-}
+  //Input
+  void inputLoop();
+
+  //test
+  std::vector<std::string> readFile(std::string,std::vector<std::string> & contents);
+};
+
+
 
 #endif
