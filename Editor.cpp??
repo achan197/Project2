@@ -1,0 +1,275 @@
+#include <ncurses.h>
+#include <curses.h>
+#include <stdlib.h>
+#include <string>
+#include <string.h>
+#include <csignal>
+#include <fstream>
+#include <fcntl.h>
+#include <ncurses.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <menu.h>
+#include <cstdlib>
+#include <vector>
+#include <string>
+#include <iostream>
+
+using namespace std;
+
+  void startMain(WINDOW *&mainName);
+  void startMenu(WINDOW *&menuName);
+  void menuOpen(WINDOW *&menu, WINDOW *&main, string &fileName, vector<string> &contents, unsigned int & position, bool &saved);
+  void menuSave(WINDOW *&menu, WINDOW *&main, string fileName, vector<string> contents, unsigned int &position, bool &saved);
+  void menuExit(WINDOW *&menuWindow, WINDOW *mainWindow);
+  void printFile(WINDOW *&main, vector<string> contents, unsigned int &position);
+  WINDOW *create_mainwin(int height, int width, int starty, int startx);
+  WINDOW *create_menuwin(int height, int width, int starty, int startx);
+  
+  int main(int argc, char * argv[]){
+    
+    initscr();
+    //raw();
+    keypad(stdscr, TRUE);
+    int ch;
+    unsigned int position = 0;
+    string fileName = "sample.txt";
+    string newFileName = "";
+    vector<string> contents;
+    bool saved = true;
+    WINDOW *menu;
+    WINDOW *main;
+    
+    string title = "CSCI 1730 Editor";
+    string menubutton = "Press F1 for menu";
+  
+    mvprintw(0, 1, menubutton.c_str());
+    mvprintw(0, COLS/2 - 8, title.c_str());
+    startMain(main);
+    
+    if(argc == 1){
+      startMenu(menu);
+      menuOpen(menu, main, fileName, contents, position, saved);
+    }
+    refresh();
+    if(argc ==2){
+      fileName = argv[1];
+    }
+    while((ch = getch()) != KEY_F(9)){
+      
+      switch(ch){
+        
+        case KEY_F(1):
+        {
+          startMenu(menu);
+          int key = getch();
+          if(key == '1'){
+            noecho();
+            menuOpen(menu, main, fileName, contents, position, saved);
+            noecho();
+          }
+          else if(key == '2'){
+            noecho();
+            menuSave(menu, main, fileName, contents, position, saved);
+            wrefresh(main);
+          }
+          else if(key == '4'){
+            delwin(main);
+            endwin();
+            exit(0);
+          }
+          break;
+        }
+        case KEY_LEFT:
+          wclear(main);
+          wrefresh(main);
+          break;
+        case KEY_UP:
+          delwin(main);
+          endwin();
+          exit(0);
+      }
+    }
+
+  }
+  
+  void startMain(WINDOW *&mainName){
+    int height, width, starty, startx;
+    height = LINES-2;
+    width = COLS;
+    starty = (LINES - height)/2;
+    startx = 0;
+    refresh();
+    mainName = create_mainwin(height, width, starty, startx);
+    
+  }
+  
+  void startMenu(WINDOW *&menuName){
+    
+    int menuHeight, menuWidth, menuStarty, menuStartx;
+    menuHeight = 10;
+    menuWidth = 50;
+    menuStarty = (LINES - menuHeight)/2;
+    menuStartx = (COLS - menuWidth)/2;
+    refresh();
+    menuName = create_menuwin(menuHeight, menuWidth, menuStarty, menuStartx);
+  }
+  
+  void menuOpen(WINDOW *&menu, WINDOW *&main, string &fileName, vector<string> &contents,unsigned int & position, bool &saved){ 
+    char charStr[30];
+    
+    if(saved == false){
+      
+      wclear(menu);
+      box(menu, 0, 0);
+      string saveInstr = " File has not been saved.  \n  Would you like to save?  \n  (Press Y for Yes, N for No)";
+      mvwprintw(menu, 1, 1, saveInstr.c_str());
+      //refresh();
+      wrefresh(menu);
+      int input = wgetch(menu);
+      if(input == 'Y'){
+        refresh();
+        menuSave(menu, main, fileName, contents, position, saved);
+        wclear(menu);
+        box(menu, 0, 0);
+        string strSave = "File has been saved. Press any key to continue.";
+        mvwprintw(menu, 1, 1, strSave.c_str());
+        refresh();
+        wrefresh(menu);
+        wgetch(menu);
+      }
+    }
+    //saved = false;
+    wclear(menu);
+    echo();
+    string openInstr = " Enter a file to open: \n";
+    mvwprintw(menu, 1, 1, openInstr.c_str()); //prints instruction to the menu window
+    box(menu, 0, 0);
+    refresh();
+    wrefresh(menu); //refreshes the menu  window
+    mvwgetstr(menu, 2, 1, charStr); //gets the text from the window and stores into a char array
+    noecho();
+    fileName = "";
+    for(char &c : charStr){
+      fileName = fileName + c;
+    }
+    ifstream file;
+    file.open(fileName);
+    
+    if(file){ 
+      mvprintw(LINES-1, 1, fileName.c_str());
+      wclear(menu);
+      wrefresh(menu);
+      delwin(menu);
+      string line;
+      while(!file.eof()){
+        getline(file,line);
+        contents.push_back(line);
+      }
+      printFile(main, contents, position);
+      wrefresh(main);
+      refresh();
+    }
+    else{
+      
+      wclear(menu);
+      box(menu, 0, 0);
+      string message = " Could not open file. \n  Press F1 to return to the menu.";
+      mvwprintw(menu, 1, 1, message.c_str());
+      box(menu, 0, 0);
+      wrefresh(menu);
+    }
+  }
+  void menuSave(WINDOW *&menu, WINDOW *&main, string fileName, vector<string> contents, unsigned int &position, bool &saved){
+    
+    if(fileName.empty()){
+      noecho();
+      wclear(menu);
+      string error = "No file has been opened to be saved. \n Press F1 to return to the menu.";
+      mvwprintw(menu, 1, 1, error.c_str());
+      box(menu, 0, 0);
+      wrefresh(menu);
+    }
+    else{
+      noecho();
+      ofstream newFile(fileName);  
+      
+      for(std::string &s : contents){  
+        newFile << s << '\n';    
+      }  
+      newFile.close();
+      saved = true;
+      
+      wclear(menu);
+      string message = fileName;
+      message = " has been saved. Press any key to continue.";
+      mvwprintw(menu, 1, 1, message.c_str());
+      box(menu, 0, 0);
+      wrefresh(menu);
+      noecho();
+      wgetch(menu);
+      delwin(menu);
+      
+      printFile(main, contents, position);
+    }
+  }
+  
+  void menuExit(WINDOW *menuWindow, WINDOW *mainWindow){
+    delwin(menuWindow);
+    clear();
+    //bool edited == true in vector being edited. in save function = bolean == false
+      //if true, ask if they want to save (save method)
+    //else
+    clear();
+    delwin(mainWindow);
+    endwin();
+    exit(0);
+  }
+  
+  void printFile(WINDOW *&main, vector<string> contents, unsigned int &position){
+    unsigned int row, col;
+    getmaxyx(main, row, col);
+    wclear(main);
+    startMain(main);
+    wrefresh(main);
+    for(unsigned int i = 4; i < (row-4); ++i){
+      if(position <  contents.size()-1){
+        mvaddstr(i,2,contents[position].c_str());
+        wrefresh(main);
+        ++position;
+      }
+    }
+  }
+  WINDOW *create_mainwin(int height, int width, int starty, int startx){
+    WINDOW *local_win = newwin(height, width, starty, startx);
+    //wborder(local_win, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '); // 0, 0 gives default characters
+    //box(local_win,0,0);                                         //for the vertical and horizontal
+                                                                //lines
+    int rows, cols;
+    getmaxyx(local_win, rows, cols);
+    mvwhline(local_win, 0, 0, '-', COLS);
+    mvwhline(local_win, rows-1, 0, '-', COLS);
+    wrefresh(local_win); /* Show that box */
+    return local_win;
+  }
+  
+  WINDOW *create_menuwin(int height, int width, int starty, int startx){
+    WINDOW *local_win = newwin(height, width, starty, startx);
+    box(local_win, 0 , 0);
+    
+    string s = " Press 1, 2, or 3 to select an option:";
+    string s1 = " 1. Open";
+    string s2 = " 2. Save";
+    string s3 = " 3. Save As";
+    string s4 = " 4. Exit";
+
+    mvwprintw(local_win, 1,1, s.c_str());
+    mvwprintw(local_win, 3, 1, s1.c_str());
+    mvwprintw(local_win, 4, 1, s2.c_str());
+    mvwprintw(local_win, 5, 1, s3.c_str());
+    mvwprintw(local_win, 6, 1, s4.c_str());
+    
+    wrefresh(local_win);
+    
+    return local_win;
+  }
